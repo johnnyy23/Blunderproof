@@ -1479,7 +1479,7 @@ export default function Home() {
   const showTopNavigation = currentPage !== "course" && currentPage !== "analysis";
 
   if (isPublicLaunchLock !== false) {
-    return <ComingSoonPage isWaitlistOnly />;
+    return <ComingSoonPage isWaitlistOnly onGetEarlyAccess={handleOpenSignup} onLogin={handleOpenLogin} />;
   }
 
   if (currentPage === "landing") {
