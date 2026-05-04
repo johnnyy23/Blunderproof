@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { AnalysisPage } from "@/components/AnalysisPage";
 import { AffiliateAdminPage } from "@/components/AffiliateAdminPage";
 import { AppSidebar, type AppPage } from "@/components/AppSidebar";
@@ -61,6 +61,13 @@ type PendingPromotion = {
 
 type TrainingMode = "study" | "test";
 
+type RemoteUserProgress = {
+  course_id: string;
+  line_id: string;
+  status: TrainingStatus;
+  last_move_index: number | null;
+};
+
 const trainingModeStorageKey = "blounderproof:training-mode:v1";
 const trainingSoundStorageKey = "blounderproof:training-sound:v1";
 const localProfileStorageKey = "blounderproof:local-profile:v1";
@@ -100,6 +107,10 @@ const boardThemes: BoardTheme[] = [
 ];
 
 const profilePreviewBoard = parseFen("rnbqkbnr/pppp1ppp/8/4p3/3PP3/2N2N2/PPP2PPP/R1BQKB1R w KQkq - 2 4").board;
+
+function isTrainingStatus(value: unknown): value is TrainingStatus {
+  return value === "idle" || value === "correct" || value === "incorrect" || value === "revealed";
+}
 
 function createBoardState(fen: string): BoardState {
   const parsed = parseFen(fen);
@@ -242,6 +253,21 @@ function buildReplaySnapshots(line: TrainingLine): BoardState[] {
   return snapshots;
 }
 
+function detectPublicLaunchLock(): boolean | null {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  const host = window.location.hostname.toLowerCase();
+  const isLocalHost =
+    host === "localhost" ||
+    host === "127.0.0.1" ||
+    host === "::1" ||
+    host.endsWith(".local");
+
+  return !isLocalHost;
+}
+
 export default function Home() {
   const [currentPage, setCurrentPage] = useState<HomeView>("landing");
   const [authEntryMode, setAuthEntryMode] = useState<"signin" | "signup">("signin");
@@ -298,11 +324,20 @@ export default function Home() {
   const [isSavingMembership, setIsSavingMembership] = useState(false);
   const [showCompletionConfetti, setShowCompletionConfetti] = useState(false);
   const [completionConfettiKey, setCompletionConfettiKey] = useState(0);
+  const [isPublicLaunchLock, setIsPublicLaunchLock] = useState<boolean | null>(() => detectPublicLaunchLock());
+  const [remoteProgressByLine, setRemoteProgressByLine] = useState<Record<string, RemoteUserProgress>>({});
+  const progressSaveTimeoutRef = useRef<number | null>(null);
+  const pendingProgressSaveRef = useRef<{ courseId: string; lineId: string; status: TrainingStatus; lastMoveIndex: number } | null>(null);
 
   const currentMove = getCurrentTrainingMove(activeLine, moveIndex);
   const replaySnapshots = useMemo(() => buildReplaySnapshots(activeLine), [activeLine]);
   const isLineComplete = status === "correct" && moveIndex === activeLine.moves.length - 1;
   const displayedBoardState = replayIndex !== null ? replaySnapshots[Math.min(replayIndex, replaySnapshots.length - 1)] ?? boardState : boardState;
+  const dueLinesForCourse = useMemo(() => getDueLines(activeCourse, progress), [activeCourse, progress]);
+  const mistakeLinesForCourse = useMemo(() => getMistakeReviewLines(activeCourse, progress), [activeCourse, progress]);
+  const activeLineStatus = useMemo(() => getLineStatus(activeLine, progress), [activeLine, progress]);
+  const canUndoMove = status === "idle" && moveIndex > 0;
+  const canGoPreviousLine = activeCourse.lines.length > 1;
 
   useEffect(() => {
     setProgress(touchDailyStreak(loadStoredProgress()));
@@ -351,6 +386,95 @@ export default function Home() {
       isMounted = false;
     };
   }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    let isMounted = true;
+
+    async function loadRemoteProgress() {
+      if (!authUser) {
+        if (isMounted) {
+          setRemoteProgressByLine({});
+        }
+        return;
+      }
+
+      try {
+        const response = await fetch(`/api/progress/get?course_id=${encodeURIComponent(activeCourseId)}`);
+        const payload = (await response.json()) as { progress?: unknown };
+
+        if (!isMounted) {
+          return;
+        }
+
+        if (!response.ok || !Array.isArray(payload.progress)) {
+          return;
+        }
+
+        const next: Record<string, RemoteUserProgress> = {};
+
+        for (const entry of payload.progress as unknown[]) {
+          if (!entry || typeof entry !== "object") {
+            continue;
+          }
+
+          const record = entry as Partial<RemoteUserProgress>;
+          if (typeof record.course_id !== "string" || typeof record.line_id !== "string") {
+            continue;
+          }
+
+          next[`${record.course_id}:${record.line_id}`] = {
+            course_id: record.course_id,
+            line_id: record.line_id,
+            status: isTrainingStatus(record.status) ? record.status : "idle",
+            last_move_index: typeof record.last_move_index === "number" ? record.last_move_index : null
+          };
+        }
+
+        setRemoteProgressByLine(next);
+
+        if (currentPage === "course") {
+          const restored = next[`${activeCourseId}:${activeLine.id}`];
+          if (restored) {
+            const restoredMoveIndex =
+              typeof restored.last_move_index === "number"
+                ? Math.max(0, Math.min(restored.last_move_index, activeLine.moves.length - 1))
+                : 0;
+            const prepared = restoredMoveIndex > 0 ? prepareLineAtMove(activeLine, restoredMoveIndex) : applyPrelude(activeLine);
+
+            setBoardState(prepared.boardState);
+            setSelectedSquare(null);
+            setLegalMoves([]);
+            setMoveIndex(restoredMoveIndex);
+            setStatus(restored.status);
+            setMoveHistory(prepared.moveHistory);
+            setPendingPromotion(null);
+            setHintedSquare(null);
+            setRevealedSquare(null);
+            setComputerSquare(null);
+            setComputerTargetSquare(null);
+            setMistakenSquare(null);
+            setCorrectSquare(null);
+            setTrainerAnnotations(undefined);
+            setReplayIndex(null);
+          }
+        }
+      } catch {
+        if (isMounted) {
+          setRemoteProgressByLine({});
+        }
+      }
+    }
+
+    void loadRemoteProgress();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [activeCourseId, authUser, currentPage]);
 
   useEffect(() => {
     if (typeof window === "undefined" || !authUser) {
@@ -494,6 +618,10 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
+    setIsPublicLaunchLock(detectPublicLaunchLock());
+  }, []);
+
+  useEffect(() => {
     if (hasLoadedProgress) {
       saveStoredProgress(progress);
       saveImportedCourses(importedCourses);
@@ -572,15 +700,18 @@ export default function Home() {
   function loadLine(nextCourseId: string, nextLineIndexValue: number) {
     const course = allCourses.find((item) => item.id === nextCourseId) ?? allCourses[0];
     const line = course.lines[nextLineIndexValue] ?? course.lines[0];
-    const preparedLine = applyPrelude(line);
+    const remote = remoteProgressByLine[`${course.id}:${line.id}`];
+    const restoredMoveIndex =
+      typeof remote?.last_move_index === "number" ? Math.max(0, Math.min(remote.last_move_index, line.moves.length - 1)) : 0;
+    const preparedLine = restoredMoveIndex > 0 ? prepareLineAtMove(line, restoredMoveIndex) : applyPrelude(line);
 
     setActiveCourseId(nextCourseId);
     setLineIndex(nextLineIndexValue);
     setBoardState(preparedLine.boardState);
     setSelectedSquare(null);
     setLegalMoves([]);
-    setMoveIndex(0);
-    setStatus("idle");
+    setMoveIndex(restoredMoveIndex);
+    setStatus(remote?.status ?? "idle");
     setMoveHistory(preparedLine.moveHistory);
     setPendingPromotion(null);
     setHintedSquare(null);
@@ -839,6 +970,81 @@ export default function Home() {
     );
   }
 
+  async function saveRemoteProgress(update: { courseId: string; lineId: string; status: TrainingStatus; lastMoveIndex: number }) {
+    if (!authUser) {
+      return;
+    }
+
+    const lineProgress = progress.lines[update.lineId];
+    const completedReps = lineProgress?.correct ?? 0;
+    const mistakeCount = (lineProgress?.revealed ?? 0) + (lineProgress?.lapses ?? 0);
+
+    try {
+      const response = await fetch("/api/progress/save", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          course_id: update.courseId,
+          line_id: update.lineId,
+          status: update.status,
+          last_position_fen: null,
+          last_move_index: update.lastMoveIndex,
+          completed_reps: completedReps,
+          mistake_count: mistakeCount
+        })
+      });
+
+      const payload = (await response.json()) as { progress?: RemoteUserProgress; error?: string };
+
+      if (!response.ok || !payload.progress) {
+        return;
+      }
+
+      setRemoteProgressByLine((current) => ({
+        ...current,
+        [`${payload.progress.course_id}:${payload.progress.line_id}`]: payload.progress
+      }));
+    } catch {
+      // Best-effort only.
+    }
+  }
+
+  function flushRemoteProgressSave() {
+    if (progressSaveTimeoutRef.current !== null) {
+      window.clearTimeout(progressSaveTimeoutRef.current);
+      progressSaveTimeoutRef.current = null;
+    }
+
+    const pending = pendingProgressSaveRef.current;
+    pendingProgressSaveRef.current = null;
+
+    if (!pending) {
+      return;
+    }
+
+    void saveRemoteProgress(pending);
+  }
+
+  function scheduleRemoteProgressSave(update: { courseId: string; lineId: string; status: TrainingStatus; lastMoveIndex: number }) {
+    pendingProgressSaveRef.current = update;
+
+    if (progressSaveTimeoutRef.current !== null) {
+      window.clearTimeout(progressSaveTimeoutRef.current);
+    }
+
+    progressSaveTimeoutRef.current = window.setTimeout(() => {
+      progressSaveTimeoutRef.current = null;
+      flushRemoteProgressSave();
+    }, 800);
+  }
+
+  useEffect(() => {
+    return () => {
+      flushRemoteProgressSave();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   function handleSquareClick(square: Square) {
     if (status === "correct") {
       return;
@@ -959,6 +1165,11 @@ export default function Home() {
     setProgress((current) => updateProgressForAnswer(current, activeLine.id, true, moveIndex === activeLine.moves.length - 1));
     playTrainerSound(moveIndex === activeLine.moves.length - 1 ? "complete" : move.captured ? "capture" : "move", soundEnabled);
 
+    if (moveIndex === activeLine.moves.length - 1) {
+      flushRemoteProgressSave();
+      void saveRemoteProgress({ courseId: activeCourse.id, lineId: activeLine.id, status: "correct", lastMoveIndex: moveIndex });
+    }
+
     if (currentMove.opponentReply) {
       window.setTimeout(() => {
         setBoardState({
@@ -983,6 +1194,7 @@ export default function Home() {
         setMistakenSquare(null);
         setCorrectSquare(null);
         setTrainerAnnotations(undefined);
+        scheduleRemoteProgressSave({ courseId: activeCourse.id, lineId: activeLine.id, status: "idle", lastMoveIndex: moveIndex + 1 });
       }, currentMove.opponentReply ? 950 : 650);
     }
   }
@@ -1019,6 +1231,11 @@ export default function Home() {
     setStatus("correct");
     setProgress((current) => updateProgressForReveal(current, activeLine.id));
     playTrainerSound(moveIndex === activeLine.moves.length - 1 ? "complete" : result.move.captured ? "capture" : "move", soundEnabled);
+
+    if (moveIndex === activeLine.moves.length - 1) {
+      flushRemoteProgressSave();
+      void saveRemoteProgress({ courseId: activeCourse.id, lineId: activeLine.id, status: "correct", lastMoveIndex: moveIndex });
+    }
 
     if (currentMove.opponentReply) {
       const currentUci = parseUciMove(currentMove.uci);
@@ -1061,6 +1278,7 @@ export default function Home() {
         setMistakenSquare(null);
         setCorrectSquare(null);
         setTrainerAnnotations(undefined);
+        scheduleRemoteProgressSave({ courseId: activeCourse.id, lineId: activeLine.id, status: "idle", lastMoveIndex: moveIndex + 1 });
       }, currentMove.opponentReply ? 1200 : 900);
     }
   }
@@ -1191,6 +1409,8 @@ export default function Home() {
   const recentActivity = getRecentActivity(progress);
   const maxActivityAttempts = Math.max(1, ...recentActivity.map((day) => day.attempts));
   const reviewedInCourse = reviewedLineCount(activeCourse, progress);
+  const masteredInCourse = getCourseLines(activeCourse).filter((line) => getLineStatus(line, progress) === "mastered").length;
+  const shakyInCourse = getCourseLines(activeCourse).filter((line) => getLineStatus(line, progress) === "shaky").length;
   const activeLineProgress = progress.lines[activeLine.id];
   const streak = progress.streak ?? initialProgress.streak;
   const createdCourseCount = importedCourses.filter((course) => course.source === "manual" || course.source === "imported-pgn").length;
@@ -1256,6 +1476,10 @@ export default function Home() {
     { page: "affiliates", label: "Affiliates", isActive: currentPage === "affiliates" }
   ];
   const showTopNavigation = currentPage !== "course" && currentPage !== "analysis";
+
+  if (isPublicLaunchLock !== false) {
+    return <ComingSoonPage isWaitlistOnly />;
+  }
 
   if (currentPage === "landing") {
     return (
@@ -1510,10 +1734,19 @@ export default function Home() {
                     move={currentMove}
                     moveIndex={moveIndex}
                     status={status}
+                    lineStatus={activeLineStatus}
                     reviewLabel={reviewLabel}
                     moveHistory={moveHistory}
                     trainingMode={trainingMode}
                     soundEnabled={soundEnabled}
+                    dueLineCount={dueLinesForCourse.length}
+                    mistakeLineCount={mistakeLinesForCourse.length}
+                    reviewedLineCount={reviewedInCourse}
+                    totalLineCount={getCourseLines(activeCourse).length}
+                    masteredLineCount={masteredInCourse}
+                    shakyLineCount={shakyInCourse}
+                    canUndoMove={canUndoMove}
+                    canGoPreviousLine={canGoPreviousLine}
                     onToggleSound={() => setSoundEnabled((current) => !current)}
                     onTrainingModeChange={setTrainingMode}
                     replayIndex={replayIndex}
