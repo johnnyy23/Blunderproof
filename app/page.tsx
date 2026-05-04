@@ -1000,9 +1000,10 @@ export default function Home() {
         return;
       }
 
+      const savedProgress = payload.progress;
       setRemoteProgressByLine((current) => ({
         ...current,
-        [`${payload.progress.course_id}:${payload.progress.line_id}`]: payload.progress
+        [`${savedProgress.course_id}:${savedProgress.line_id}`]: savedProgress
       }));
     } catch {
       // Best-effort only.
