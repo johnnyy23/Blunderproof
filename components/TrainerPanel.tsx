@@ -1,6 +1,7 @@
 "use client";
 
 import type { TrainingLine, TrainingMove } from "@/lib/courses";
+import type { LineStatus } from "@/lib/trainer";
 import type { ReviewGrade, TrainingStatus } from "@/types/chess";
 
 type TrainerPanelProps = {
@@ -8,10 +9,19 @@ type TrainerPanelProps = {
   move: TrainingMove;
   moveIndex: number;
   status: TrainingStatus;
+  lineStatus: LineStatus;
   reviewLabel: string;
   moveHistory: string[];
   trainingMode: "study" | "test";
   soundEnabled: boolean;
+  dueLineCount: number;
+  mistakeLineCount: number;
+  reviewedLineCount: number;
+  totalLineCount: number;
+  masteredLineCount: number;
+  shakyLineCount: number;
+  canUndoMove: boolean;
+  canGoPreviousLine: boolean;
   onToggleSound: () => void;
   onTrainingModeChange: (mode: "study" | "test") => void;
   replayIndex: number | null;
@@ -34,10 +44,19 @@ export function TrainerPanel({
   move,
   moveIndex,
   status,
+  lineStatus,
   reviewLabel,
   moveHistory,
   trainingMode,
   soundEnabled,
+  dueLineCount,
+  mistakeLineCount,
+  reviewedLineCount,
+  totalLineCount,
+  masteredLineCount,
+  shakyLineCount,
+  canUndoMove,
+  canGoPreviousLine,
   onToggleSound,
   onTrainingModeChange,
   replayIndex,
@@ -58,6 +77,13 @@ export function TrainerPanel({
   const showAnswer = status === "correct" || status === "revealed";
   const showCoaching = trainingMode === "study" ? showAnswer : isLineComplete;
   const canGrade = showAnswer && moveIndex === line.moves.length - 1;
+  void lineStatus;
+  void dueLineCount;
+  void mistakeLineCount;
+  void reviewedLineCount;
+  void totalLineCount;
+  void masteredLineCount;
+  void shakyLineCount;
 
   return (
     <section className="self-start rounded-lg border border-white/10 bg-zinc-950/60 p-5 xl:sticky xl:top-5 xl:max-h-[calc(100vh-2.5rem)] xl:overflow-y-auto">
@@ -128,13 +154,23 @@ export function TrainerPanel({
             </button>
           </>
         ) : null}
-        <button type="button" onClick={onUndoMove} className="rounded-md border border-white/10 px-4 py-2 text-sm font-semibold text-zinc-200 transition hover:bg-white/[0.06]">
+        <button
+          type="button"
+          onClick={onUndoMove}
+          disabled={!canUndoMove}
+          className="rounded-md border border-white/10 px-4 py-2 text-sm font-semibold text-zinc-200 transition hover:bg-white/[0.06] disabled:cursor-not-allowed disabled:opacity-45"
+        >
           Undo move
         </button>
         <button type="button" onClick={onReset} className="rounded-md border border-white/10 px-4 py-2 text-sm font-semibold text-zinc-200 transition hover:bg-white/[0.06]">
           Reset line
         </button>
-        <button type="button" onClick={onPreviousLine} className="rounded-md border border-white/10 px-4 py-2 text-sm font-semibold text-zinc-200 transition hover:bg-white/[0.06]">
+        <button
+          type="button"
+          onClick={onPreviousLine}
+          disabled={!canGoPreviousLine}
+          className="rounded-md border border-white/10 px-4 py-2 text-sm font-semibold text-zinc-200 transition hover:bg-white/[0.06] disabled:cursor-not-allowed disabled:opacity-45"
+        >
           Previous line
         </button>
         <button type="button" onClick={onNextLine} className="rounded-md border border-white/10 px-4 py-2 text-sm font-semibold text-zinc-200 transition hover:bg-white/[0.06]">
