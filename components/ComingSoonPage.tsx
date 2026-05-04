@@ -5,6 +5,7 @@ import { useMemo, useState } from "react";
 type ComingSoonPageProps = {
   onGetEarlyAccess: (email: string) => void;
   onLogin: () => void;
+  isWaitlistOnly?: boolean;
 };
 
 export function ComingSoonPage({ onGetEarlyAccess, onLogin }: ComingSoonPageProps) {
