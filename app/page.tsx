@@ -68,6 +68,8 @@ type RemoteUserProgress = {
   last_move_index: number | null;
 };
 
+type ProgressSaveState = "idle" | "saving" | "saved" | "error";
+
 const trainingModeStorageKey = "blounderproof:training-mode:v1";
 const trainingSoundStorageKey = "blounderproof:training-sound:v1";
 const localProfileStorageKey = "blounderproof:local-profile:v1";
@@ -328,6 +330,9 @@ export default function Home() {
   const [remoteProgressByLine, setRemoteProgressByLine] = useState<Record<string, RemoteUserProgress>>({});
   const progressSaveTimeoutRef = useRef<number | null>(null);
   const pendingProgressSaveRef = useRef<{ courseId: string; lineId: string; status: TrainingStatus; lastMoveIndex: number } | null>(null);
+  const lastAttemptedProgressSaveRef = useRef<{ courseId: string; lineId: string; status: TrainingStatus; lastMoveIndex: number } | null>(null);
+  const [progressSaveState, setProgressSaveState] = useState<ProgressSaveState>("idle");
+  const [progressSaveError, setProgressSaveError] = useState<string>("");
 
   const currentMove = getCurrentTrainingMove(activeLine, moveIndex);
   const replaySnapshots = useMemo(() => buildReplaySnapshots(activeLine), [activeLine]);
@@ -975,6 +980,10 @@ export default function Home() {
       return;
     }
 
+    setProgressSaveState("saving");
+    setProgressSaveError("");
+    lastAttemptedProgressSaveRef.current = update;
+
     const lineProgress = progress.lines[update.lineId];
     const completedReps = lineProgress?.correct ?? 0;
     const mistakeCount = (lineProgress?.revealed ?? 0) + (lineProgress?.lapses ?? 0);
@@ -997,6 +1006,8 @@ export default function Home() {
       const payload = (await response.json()) as { progress?: RemoteUserProgress; error?: string };
 
       if (!response.ok || !payload.progress) {
+        setProgressSaveState("error");
+        setProgressSaveError(payload.error || "Failed to save progress.");
         return;
       }
 
@@ -1005,8 +1016,11 @@ export default function Home() {
         const key = `${savedProgress.course_id}:${savedProgress.line_id}`;
         return { ...current, [key]: savedProgress };
       });
+      setProgressSaveState("saved");
+      window.setTimeout(() => setProgressSaveState("idle"), 1200);
     } catch {
-      // Best-effort only.
+      setProgressSaveState("error");
+      setProgressSaveError("Failed to save progress. Check your connection and retry.");
     }
   }
 
@@ -1028,6 +1042,8 @@ export default function Home() {
 
   function scheduleRemoteProgressSave(update: { courseId: string; lineId: string; status: TrainingStatus; lastMoveIndex: number }) {
     pendingProgressSaveRef.current = update;
+    setProgressSaveState("saving");
+    setProgressSaveError("");
 
     if (progressSaveTimeoutRef.current !== null) {
       window.clearTimeout(progressSaveTimeoutRef.current);
@@ -1045,6 +1061,16 @@ export default function Home() {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  function handleRetryProgressSave() {
+    const lastAttempted = lastAttemptedProgressSaveRef.current;
+    if (!lastAttempted) {
+      return;
+    }
+
+    flushRemoteProgressSave();
+    void saveRemoteProgress(lastAttempted);
+  }
 
   function handleSquareClick(square: Square) {
     if (status === "correct") {
@@ -1764,6 +1790,28 @@ export default function Home() {
                     onNextMistakeLine={handleNextMistakeLine}
                     onGradeReview={handleGradeReview}
                   />
+                  {authUser ? (
+                    <div className="rounded-md border border-white/10 bg-white/[0.03] px-4 py-3 text-sm text-zinc-300">
+                      {progressSaveState === "saving" ? (
+                        <span>Saving...</span>
+                      ) : progressSaveState === "saved" ? (
+                        <span className="text-emerald-200">Saved</span>
+                      ) : progressSaveState === "error" ? (
+                        <div className="flex flex-wrap items-center justify-between gap-3">
+                          <span className="text-rose-200">{progressSaveError || "Failed to save progress."}</span>
+                          <button
+                            type="button"
+                            onClick={handleRetryProgressSave}
+                            className="rounded-md border border-white/10 bg-white/[0.03] px-3 py-1.5 text-sm font-semibold text-zinc-200 transition hover:bg-white/[0.06]"
+                          >
+                            Retry
+                          </button>
+                        </div>
+                      ) : (
+                        <span className="text-zinc-500">Progress sync ready</span>
+                      )}
+                    </div>
+                  ) : null}
                   <CourseLeaderboardCard
                     course={activeCourse}
                     playEvents={playEvents}

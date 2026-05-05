@@ -12,6 +12,7 @@ function debugLog(...args: unknown[]) {
     console.log("[progress/get]", ...args);
   }
 }
+// TODO(v1-launch): Remove preview/dev debug logs once progress is stable in production.
 
 export async function GET(request: Request) {
   try {
