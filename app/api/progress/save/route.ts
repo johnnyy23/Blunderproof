@@ -64,7 +64,6 @@ export async function POST(request: Request) {
       last_move_index: body.last_move_index ?? null,
       completed_reps: body.completed_reps ?? null,
       mistake_count: body.mistake_count ?? null,
-      updated_at: new Date().toISOString()
     };
 
     debugLog("upsert payload", payload);
