@@ -66,6 +66,7 @@ type RemoteUserProgress = {
   line_id: string;
   status: TrainingStatus;
   last_move_index: number | null;
+  updated_at?: string;
 };
 
 type ProgressSaveState = "idle" | "saving" | "saved" | "error";
@@ -328,11 +329,13 @@ export default function Home() {
   const [completionConfettiKey, setCompletionConfettiKey] = useState(0);
   const [isPublicLaunchLock, setIsPublicLaunchLock] = useState<boolean | null>(() => detectPublicLaunchLock());
   const [remoteProgressByLine, setRemoteProgressByLine] = useState<Record<string, RemoteUserProgress>>({});
+  const [remoteProgressAllByLine, setRemoteProgressAllByLine] = useState<Record<string, RemoteUserProgress>>({});
   const progressSaveTimeoutRef = useRef<number | null>(null);
   const pendingProgressSaveRef = useRef<{ courseId: string; lineId: string; status: TrainingStatus; lastMoveIndex: number } | null>(null);
   const lastAttemptedProgressSaveRef = useRef<{ courseId: string; lineId: string; status: TrainingStatus; lastMoveIndex: number } | null>(null);
   const [progressSaveState, setProgressSaveState] = useState<ProgressSaveState>("idle");
   const [progressSaveError, setProgressSaveError] = useState<string>("");
+  const progressSaveIndicatorTimeoutRef = useRef<number | null>(null);
 
   const currentMove = getCurrentTrainingMove(activeLine, moveIndex);
   const replaySnapshots = useMemo(() => buildReplaySnapshots(activeLine), [activeLine]);
@@ -435,7 +438,8 @@ export default function Home() {
             course_id: record.course_id,
             line_id: record.line_id,
             status: isTrainingStatus(record.status) ? record.status : "idle",
-            last_move_index: typeof record.last_move_index === "number" ? record.last_move_index : null
+            last_move_index: typeof record.last_move_index === "number" ? record.last_move_index : null,
+            updated_at: typeof (record as any).updated_at === "string" ? (record as any).updated_at : undefined
           };
         }
 
@@ -480,6 +484,73 @@ export default function Home() {
       isMounted = false;
     };
   }, [activeCourseId, authUser, currentPage]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    let isMounted = true;
+
+    async function loadAllRemoteProgress() {
+      if (!authUser) {
+        if (isMounted) {
+          setRemoteProgressAllByLine({});
+        }
+        return;
+      }
+
+      if (currentPage !== "courses") {
+        return;
+      }
+
+      try {
+        const response = await fetch("/api/progress/get");
+        const payload = (await response.json()) as { progress?: unknown };
+
+        if (!isMounted) {
+          return;
+        }
+
+        if (!response.ok || !Array.isArray(payload.progress)) {
+          return;
+        }
+
+        const next: Record<string, RemoteUserProgress> = {};
+
+        for (const entry of payload.progress as unknown[]) {
+          if (!entry || typeof entry !== "object") {
+            continue;
+          }
+
+          const record = entry as Partial<RemoteUserProgress>;
+          if (typeof record.course_id !== "string" || typeof record.line_id !== "string") {
+            continue;
+          }
+
+          next[`${record.course_id}:${record.line_id}`] = {
+            course_id: record.course_id,
+            line_id: record.line_id,
+            status: isTrainingStatus(record.status) ? record.status : "idle",
+            last_move_index: typeof record.last_move_index === "number" ? record.last_move_index : null,
+            updated_at: typeof (record as any).updated_at === "string" ? (record as any).updated_at : undefined
+          };
+        }
+
+        setRemoteProgressAllByLine(next);
+      } catch {
+        if (isMounted) {
+          setRemoteProgressAllByLine({});
+        }
+      }
+    }
+
+    void loadAllRemoteProgress();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [authUser, currentPage]);
 
   useEffect(() => {
     if (typeof window === "undefined" || !authUser) {
@@ -771,6 +842,20 @@ export default function Home() {
     openCourseBoard(courseId, 0, true);
   }
 
+  function handleResumeCourseLine(courseId: string, lineId: string) {
+    const course = allCourses.find((item) => item.id === courseId);
+    if (!course) {
+      openCourseBoard(courseId, 0, true);
+      return;
+    }
+
+    const nextLineIndex = Math.max(
+      0,
+      course.lines.findIndex((line) => line.id === lineId)
+    );
+    openCourseBoard(courseId, nextLineIndex, true);
+  }
+
   function handleAuthChange(user: AuthUser | null) {
     setAuthUser(user);
     setMembershipMessage("");
@@ -1025,6 +1110,11 @@ export default function Home() {
   }
 
   function flushRemoteProgressSave() {
+    if (progressSaveIndicatorTimeoutRef.current !== null) {
+      window.clearTimeout(progressSaveIndicatorTimeoutRef.current);
+      progressSaveIndicatorTimeoutRef.current = null;
+    }
+
     if (progressSaveTimeoutRef.current !== null) {
       window.clearTimeout(progressSaveTimeoutRef.current);
       progressSaveTimeoutRef.current = null;
@@ -1042,8 +1132,24 @@ export default function Home() {
 
   function scheduleRemoteProgressSave(update: { courseId: string; lineId: string; status: TrainingStatus; lastMoveIndex: number }) {
     pendingProgressSaveRef.current = update;
-    setProgressSaveState("saving");
-    setProgressSaveError("");
+
+    if (progressSaveState !== "error") {
+      setProgressSaveError("");
+    }
+
+    if (progressSaveIndicatorTimeoutRef.current !== null) {
+      window.clearTimeout(progressSaveIndicatorTimeoutRef.current);
+    }
+
+    progressSaveIndicatorTimeoutRef.current = window.setTimeout(() => {
+      progressSaveIndicatorTimeoutRef.current = null;
+      setProgressSaveState((current) => {
+        if (!pendingProgressSaveRef.current) {
+          return current;
+        }
+        return current === "idle" || current === "saved" ? "saving" : current;
+      });
+    }, 450);
 
     if (progressSaveTimeoutRef.current !== null) {
       window.clearTimeout(progressSaveTimeoutRef.current);
@@ -1693,7 +1799,14 @@ export default function Home() {
                 </div>
               </section>
 
-              <CourseCatalog courses={filteredCourses} activeCourseId={activeCourse.id} progress={progress} onSelectCourse={handleSelectCourse} />
+              <CourseCatalog
+                courses={filteredCourses}
+                activeCourseId={activeCourse.id}
+                progress={progress}
+                onSelectCourse={handleSelectCourse}
+                remoteProgress={remoteProgressAllByLine}
+                onResume={handleResumeCourseLine}
+              />
               <CommunityCourseShelf courses={communityCourses} onOpenCourse={handleSelectCourse} />
 
             </>

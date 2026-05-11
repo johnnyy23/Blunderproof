@@ -5,14 +5,23 @@ import type { TrainerProgress } from "@/lib/trainer";
 import { getNextEnPassantTarget, getUpdatedCastlingRights, makeMove, parseFen, parseUciMove } from "@/lib/chess";
 import type { Board, CastlingRights, ChessPiece, Square } from "@/types/chess";
 
+type RemoteUserProgress = {
+  course_id: string;
+  line_id: string;
+  last_move_index: number | null;
+  updated_at?: string;
+};
+
 type CourseCatalogProps = {
   courses: OpeningCourse[];
   activeCourseId: string;
   progress: TrainerProgress;
   onSelectCourse: (courseId: string) => void;
+  remoteProgress?: Record<string, RemoteUserProgress>;
+  onResume?: (courseId: string, lineId: string) => void;
 };
 
-export function CourseCatalog({ courses, activeCourseId, progress, onSelectCourse }: CourseCatalogProps) {
+export function CourseCatalog({ courses, activeCourseId, progress, onSelectCourse, remoteProgress, onResume }: CourseCatalogProps) {
   return (
     <section className="rounded-lg border border-white/10 bg-zinc-950/55 p-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -29,12 +38,17 @@ export function CourseCatalog({ courses, activeCourseId, progress, onSelectCours
           const sections = Array.from(new Set(course.lines.map((line) => line.section).filter(Boolean)));
           const isActive = course.id === activeCourseId;
           const courseType = inferCourseType(course);
+          const resumeEntry =
+            remoteProgress && onResume
+              ? course.lines
+                  .map((line) => remoteProgress[`${course.id}:${line.id}`])
+                  .filter((entry): entry is RemoteUserProgress => Boolean(entry))
+                  .sort((left, right) => (right.updated_at ?? "").localeCompare(left.updated_at ?? ""))[0]
+              : null;
 
           return (
-            <button
+            <div
               key={course.id}
-              type="button"
-              onClick={() => onSelectCourse(course.id)}
               className={[
                 "rounded-lg border p-4 text-left transition",
                 isActive
@@ -72,9 +86,28 @@ export function CourseCatalog({ courses, activeCourseId, progress, onSelectCours
                       ))}
                     </div>
                   ) : null}
+
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() => onSelectCourse(course.id)}
+                      className="rounded-md border border-white/10 bg-white/[0.03] px-3 py-2 text-sm font-semibold text-zinc-200 transition hover:bg-white/[0.06]"
+                    >
+                      Open
+                    </button>
+                    {resumeEntry ? (
+                      <button
+                        type="button"
+                        onClick={() => onResume?.(course.id, resumeEntry.line_id)}
+                        className="rounded-md bg-emerald-300 px-3 py-2 text-sm font-semibold text-zinc-950 transition hover:bg-emerald-200"
+                      >
+                        Resume
+                      </button>
+                    ) : null}
+                  </div>
                 </div>
               </div>
-            </button>
+            </div>
           );
         })}
       </div>
