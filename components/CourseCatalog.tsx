@@ -97,16 +97,6 @@ export function CourseCatalog({ courses, activeCourseId, progress, onSelectCours
                   ) : null}
 
                   <div className="mt-4 flex flex-wrap gap-2">
-                    <button
-                      type="button"
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        onSelectCourse(course.id);
-                      }}
-                      className="rounded-md border border-white/10 bg-white/[0.03] px-3 py-2 text-sm font-semibold text-zinc-200 transition hover:bg-white/[0.06]"
-                    >
-                      Open
-                    </button>
                     {resumeEntry ? (
                       <button
                         type="button"
