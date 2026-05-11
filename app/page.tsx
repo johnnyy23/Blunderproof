@@ -271,6 +271,40 @@ function detectPublicLaunchLock(): boolean | null {
   return !isLocalHost;
 }
 
+function formatRelativeTimestamp(value?: string): string | null {
+  if (!value) {
+    return null;
+  }
+
+  const timestamp = Date.parse(value);
+  if (!Number.isFinite(timestamp)) {
+    return null;
+  }
+
+  const deltaMs = Date.now() - timestamp;
+  if (!Number.isFinite(deltaMs) || deltaMs < 0) {
+    return "just now";
+  }
+
+  const deltaSeconds = Math.floor(deltaMs / 1000);
+  if (deltaSeconds < 60) {
+    return "just now";
+  }
+
+  const deltaMinutes = Math.floor(deltaSeconds / 60);
+  if (deltaMinutes < 60) {
+    return `${deltaMinutes}m ago`;
+  }
+
+  const deltaHours = Math.floor(deltaMinutes / 60);
+  if (deltaHours < 24) {
+    return `${deltaHours}h ago`;
+  }
+
+  const deltaDays = Math.floor(deltaHours / 24);
+  return `${deltaDays}d ago`;
+}
+
 export default function Home() {
   const [currentPage, setCurrentPage] = useState<HomeView>("landing");
   const [authEntryMode, setAuthEntryMode] = useState<"signin" | "signup">("signin");
@@ -352,6 +386,7 @@ export default function Home() {
 
     return sorted[0] ?? null;
   }, [remoteProgressAllByLine]);
+  const lastProgressRelative = useMemo(() => formatRelativeTimestamp(lastProgressEntry?.updated_at), [lastProgressEntry?.updated_at]);
   const isLineComplete = status === "correct" && moveIndex === activeLine.moves.length - 1;
   const displayedBoardState = replayIndex !== null ? replaySnapshots[Math.min(replayIndex, replaySnapshots.length - 1)] ?? boardState : boardState;
   const dueLinesForCourse = useMemo(() => getDueLines(activeCourse, progress), [activeCourse, progress]);
@@ -1832,6 +1867,9 @@ export default function Home() {
                         </span>
                         .
                       </p>
+                      {lastProgressRelative ? (
+                        <p className="mt-2 text-xs text-emerald-100/90">Last trained {lastProgressRelative}</p>
+                      ) : null}
                     </div>
                     <button
                       type="button"
