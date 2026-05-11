@@ -84,4 +84,39 @@ describe("progress routes", () => {
     const getRes = await GET(new Request("http://localhost:3000/api/progress/get?course_id=jobava-london"));
     expect(getRes.status).toBe(200);
   });
+
+  it("POST /api/progress/save returns 400 when required fields are missing", async () => {
+    const auth = await import("@/lib/auth");
+    const getUserFromSessionToken = auth.getUserFromSessionToken as unknown as ReturnType<typeof vi.fn>;
+
+    getUserFromSessionToken.mockResolvedValue({ id: "user-123" });
+    const { POST } = await import("../app/api/progress/save/route");
+
+    const missingCourse = await POST(
+      new Request("http://localhost:3000/api/progress/save", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ line_id: "jobava-main-setup", status: "idle" })
+      })
+    );
+    expect(missingCourse.status).toBe(400);
+
+    const missingLine = await POST(
+      new Request("http://localhost:3000/api/progress/save", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ course_id: "jobava-london", status: "idle" })
+      })
+    );
+    expect(missingLine.status).toBe(400);
+
+    const missingStatus = await POST(
+      new Request("http://localhost:3000/api/progress/save", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ course_id: "jobava-london", line_id: "jobava-main-setup" })
+      })
+    );
+    expect(missingStatus.status).toBe(400);
+  });
 });
