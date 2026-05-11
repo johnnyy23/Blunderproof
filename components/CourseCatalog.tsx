@@ -49,8 +49,17 @@ export function CourseCatalog({ courses, activeCourseId, progress, onSelectCours
           return (
             <div
               key={course.id}
+              role="button"
+              tabIndex={0}
+              onClick={() => onSelectCourse(course.id)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" || event.key === " ") {
+                  event.preventDefault();
+                  onSelectCourse(course.id);
+                }
+              }}
               className={[
-                "rounded-lg border p-4 text-left transition",
+                "cursor-pointer rounded-lg border p-4 text-left transition focus:outline-none focus:ring-2 focus:ring-emerald-300/40",
                 isActive
                   ? "border-emerald-300/35 bg-emerald-300/10"
                   : "border-white/10 bg-white/[0.03] hover:border-white/20 hover:bg-white/[0.05]"
@@ -88,17 +97,13 @@ export function CourseCatalog({ courses, activeCourseId, progress, onSelectCours
                   ) : null}
 
                   <div className="mt-4 flex flex-wrap gap-2">
-                    <button
-                      type="button"
-                      onClick={() => onSelectCourse(course.id)}
-                      className="rounded-md border border-white/10 bg-white/[0.03] px-3 py-2 text-sm font-semibold text-zinc-200 transition hover:bg-white/[0.06]"
-                    >
-                      Open
-                    </button>
                     {resumeEntry ? (
                       <button
                         type="button"
-                        onClick={() => onResume?.(course.id, resumeEntry.line_id)}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          onResume?.(course.id, resumeEntry.line_id);
+                        }}
                         className="rounded-md bg-emerald-300 px-3 py-2 text-sm font-semibold text-zinc-950 transition hover:bg-emerald-200"
                       >
                         Resume
