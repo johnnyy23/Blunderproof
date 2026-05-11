@@ -339,6 +339,19 @@ export default function Home() {
 
   const currentMove = getCurrentTrainingMove(activeLine, moveIndex);
   const replaySnapshots = useMemo(() => buildReplaySnapshots(activeLine), [activeLine]);
+
+  const lastProgressEntry = useMemo(() => {
+    const entries = Object.values(remoteProgressAllByLine);
+    if (entries.length === 0) {
+      return null;
+    }
+
+    const sorted = entries
+      .filter((entry) => entry && typeof entry.course_id === "string" && typeof entry.line_id === "string")
+      .sort((left, right) => (right.updated_at ?? "").localeCompare(left.updated_at ?? ""));
+
+    return sorted[0] ?? null;
+  }, [remoteProgressAllByLine]);
   const isLineComplete = status === "correct" && moveIndex === activeLine.moves.length - 1;
   const displayedBoardState = replayIndex !== null ? replaySnapshots[Math.min(replayIndex, replaySnapshots.length - 1)] ?? boardState : boardState;
   const dueLinesForCourse = useMemo(() => getDueLines(activeCourse, progress), [activeCourse, progress]);
@@ -500,10 +513,6 @@ export default function Home() {
         return;
       }
 
-      if (currentPage !== "courses") {
-        return;
-      }
-
       try {
         const response = await fetch("/api/progress/get");
         const payload = (await response.json()) as { progress?: unknown };
@@ -550,7 +559,7 @@ export default function Home() {
     return () => {
       isMounted = false;
     };
-  }, [authUser, currentPage]);
+  }, [authUser]);
 
   useEffect(() => {
     if (typeof window === "undefined" || !authUser) {
@@ -839,6 +848,15 @@ export default function Home() {
   }
 
   function handleSelectCourse(courseId: string) {
+    const saved = Object.values(remoteProgressAllByLine)
+      .filter((entry) => entry.course_id === courseId)
+      .sort((left, right) => (right.updated_at ?? "").localeCompare(left.updated_at ?? ""))[0];
+
+    if (saved) {
+      handleResumeCourseLine(courseId, saved.line_id);
+      return;
+    }
+
     openCourseBoard(courseId, 0, true);
   }
 
@@ -854,6 +872,10 @@ export default function Home() {
       course.lines.findIndex((line) => line.id === lineId)
     );
     openCourseBoard(courseId, nextLineIndex, true);
+  }
+
+  function handleResumeActiveLine() {
+    loadLine(activeCourseId, lineIndex);
   }
 
   function handleAuthChange(user: AuthUser | null) {
@@ -1637,8 +1659,7 @@ export default function Home() {
           activeCourseId={activeCourse.id}
           activeLineId={activeLine.id}
           progress={progress}
-          onSelectLesson={handleSelectLesson}
-          analysisSections={analysisSections}
+          onSelectLesson={handleSelectLesson}analysisSections={analysisSections}
           activeAnalysisSection={activeAnalysisSection}
           onSelectAnalysisSection={setActiveAnalysisSection}
         />
@@ -1799,6 +1820,30 @@ export default function Home() {
                 </div>
               </section>
 
+              {lastProgressEntry ? (
+                <section className="rounded-lg border border-emerald-300/20 bg-emerald-300/10 p-5">
+                  <div className="flex flex-wrap items-center justify-between gap-4">
+                    <div className="max-w-3xl">
+                      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-200">Resume where you left off</p>
+                      <p className="mt-2 text-sm leading-6 text-zinc-200">
+                        Continue your latest training session in{" "}
+                        <span className="font-semibold text-white">
+                          {(allCourses.find((course) => course.id === lastProgressEntry.course_id)?.name ?? "a course")}
+                        </span>
+                        .
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handleResumeCourseLine(lastProgressEntry.course_id, lastProgressEntry.line_id)}
+                      className="rounded-md bg-emerald-300 px-4 py-2 text-sm font-semibold text-zinc-950 transition hover:bg-emerald-200"
+                    >
+                      Continue
+                    </button>
+                  </div>
+                </section>
+              ) : null}
+
               <CourseCatalog
                 courses={filteredCourses}
                 activeCourseId={activeCourse.id}
@@ -1826,6 +1871,36 @@ export default function Home() {
                   </div>
                 </div>
               </section>
+
+              {(() => {
+                const saved = remoteProgressByLine[`${activeCourseId}:${activeLine.id}`];
+                const savedMoveIndex = typeof saved?.last_move_index === "number" ? saved.last_move_index : 0;
+                const shouldOfferResume = savedMoveIndex > 0 && moveIndex < savedMoveIndex;
+
+                if (!shouldOfferResume) {
+                  return null;
+                }
+
+                return (
+                  <section className="rounded-lg border border-emerald-300/20 bg-emerald-300/10 p-4">
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <div className="min-w-[240px]">
+                        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-200">Saved progress found</p>
+                        <p className="mt-1 text-sm text-zinc-200">
+                          Resume at move {savedMoveIndex + 1} for this line.
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={handleResumeActiveLine}
+                        className="rounded-md bg-emerald-300 px-3 py-2 text-sm font-semibold text-zinc-950 transition hover:bg-emerald-200"
+                      >
+                        Resume
+                      </button>
+                    </div>
+                  </section>
+                );
+              })()}
 
               <section className="grid gap-5 lg:grid-cols-[minmax(420px,1fr)_360px] xl:grid-cols-[minmax(420px,1fr)_390px]">
                 <div className="rounded-lg border border-white/10 bg-zinc-950/50 p-3 sm:p-5">
