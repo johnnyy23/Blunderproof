@@ -21,6 +21,41 @@ type CourseCatalogProps = {
   onResume?: (courseId: string, lineId: string) => void;
 };
 
+
+function formatRelativeTimestamp(value?: string): string | null {
+  if (!value) {
+    return null;
+  }
+
+  const timestamp = Date.parse(value);
+  if (!Number.isFinite(timestamp)) {
+    return null;
+  }
+
+  const deltaMs = Date.now() - timestamp;
+  if (!Number.isFinite(deltaMs) || deltaMs < 0) {
+    return "just now";
+  }
+
+  const deltaSeconds = Math.floor(deltaMs / 1000);
+  if (deltaSeconds < 60) {
+    return "just now";
+  }
+
+  const deltaMinutes = Math.floor(deltaSeconds / 60);
+  if (deltaMinutes < 60) {
+    return `${deltaMinutes}m ago`;
+  }
+
+  const deltaHours = Math.floor(deltaMinutes / 60);
+  if (deltaHours < 24) {
+    return `${deltaHours}h ago`;
+  }
+
+  const deltaDays = Math.floor(deltaHours / 24);
+  return `${deltaDays}d ago`;
+}
+
 export function CourseCatalog({ courses, activeCourseId, progress, onSelectCourse, remoteProgress, onResume }: CourseCatalogProps) {
   return (
     <section className="rounded-lg border border-white/10 bg-zinc-950/55 p-4">
@@ -45,6 +80,7 @@ export function CourseCatalog({ courses, activeCourseId, progress, onSelectCours
                   .filter((entry): entry is RemoteUserProgress => Boolean(entry))
                   .sort((left, right) => (right.updated_at ?? "").localeCompare(left.updated_at ?? ""))[0]
               : null;
+          const lastTrained = formatRelativeTimestamp(resumeEntry?.updated_at);
 
           return (
             <div
@@ -77,6 +113,10 @@ export function CourseCatalog({ courses, activeCourseId, progress, onSelectCours
                   </div>
 
                   <p className="mt-3 line-clamp-3 text-sm leading-6 text-zinc-400">{course.description}</p>
+
+                  {lastTrained ? (
+                    <p className="mt-2 text-xs text-zinc-500">Last trained {lastTrained}</p>
+                  ) : null}
 
                   <div className="mt-4 flex flex-wrap gap-2 text-[11px] text-zinc-400">
                     <span className="rounded-full border border-white/10 px-2 py-1">{course.lines.length} lessons</span>
