@@ -1812,7 +1812,7 @@ const topNavigationItems: Array<{ page: HomeView; label: string; isActive: boole
           {currentPage === "landing" ? (
             <LandingPage
               featuredCourse={featuredCourse}
-              onStartFreeTrial={() => handleOpenSignup()}
+              onStartFreeTrial={() => { window.location.href = "/start-free-trial"; }}
               onViewCourses={() => setCurrentPage("courses")}
               onLogin={handleOpenLogin}
             />
@@ -2566,7 +2566,7 @@ const topNavigationItems: Array<{ page: HomeView; label: string; isActive: boole
                     {!authUser ? (
                       <button
                         type="button"
-                        onClick={() => handleOpenSignup()}
+                        onClick={() => { window.location.href = "/start-free-trial?focus=checkout"; }}
                         className="rounded-md border border-cyan-200/40 bg-[#007BFF] px-6 py-3 text-sm font-semibold text-white shadow-[0_0_18px_rgba(54,208,255,0.25)] transition hover:bg-[#36D0FF]"
                       >
                         Start Free Trial
@@ -2574,11 +2574,7 @@ const topNavigationItems: Array<{ page: HomeView; label: string; isActive: boole
                     ) : (
                       <button
                         type="button"
-                        onClick={() => {
-                          setMembershipPlanDraft("pro");
-                          setMembershipBillingCycleDraft("monthly");
-                          void handleStripeCheckout();
-                        }}
+                        onClick={() => { window.location.href = "/start-free-trial?focus=checkout"; }}
                         className="rounded-md border border-cyan-200/40 bg-[#007BFF] px-6 py-3 text-sm font-semibold text-white shadow-[0_0_18px_rgba(54,208,255,0.25)] transition hover:bg-[#36D0FF]"
                       >
                         Start Free Trial
