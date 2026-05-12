@@ -39,3 +39,49 @@ Known limitations for the first version:
 - PGN import does not preserve NAGs, comments, or side variations as course notes yet
 
 Those are intentional Phase 2 and Phase 3 expansion points.
+
+## Stripe (test mode)
+
+This repo uses Stripe Checkout for subscriptions with a 7-day free trial.
+
+### Required env vars
+
+Add these to .env.local (local dev) and to Vercel (Preview + Production). Keep Stripe in test mode for now.
+
+- STRIPE_SECRET_KEY
+  - Used by: lib/stripe.ts (Stripe client init) and all Stripe server routes.
+  - Must be a full test secret key: starts with sk_test_...
+- STRIPE_PRICE_PRO_MONTHLY
+  - Used by: lib/stripe.ts (price selection for Checkout).
+  - Must be a Stripe Price ID with recurring interval month.
+- STRIPE_PRICE_PRO_YEARLY
+  - Used by: lib/stripe.ts (price selection for Checkout).
+  - Must be a Stripe Price ID with recurring interval year.
+- STRIPE_WEBHOOK_SECRET
+  - Used by: app/api/stripe/webhook/route.ts to verify webhook signatures.
+  - Comes from the Stripe webhook endpoint signing secret.
+- NEXT_PUBLIC_APP_URL
+  - Used by: lib/stripe.ts to build Checkout success_url and cancel_url.
+  - For Vercel, set this per-environment (Preview/Production) to the deployed URL.
+
+### Webhook endpoint
+
+- Route: /api/stripe/webhook
+- Signature verification: enabled (requires STRIPE_WEBHOOK_SECRET).
+- Events handled (test mode):
+  - customer.subscription.created
+  - customer.subscription.updated
+  - customer.subscription.deleted
+
+### Deployment checklist (Vercel)
+
+1) Set env vars in Vercel (Preview + Production).
+2) Create a Stripe test mode webhook endpoint pointing to your deployed app:
+   - https://<your-domain>/api/stripe/webhook
+3) Verify endpoints are live:
+   - GET /api/stripe/health (shows missing env vars)
+   - GET /api/stripe/webhook (returns { ok: true, hasWebhookSecret: true/false })
+4) Run a trial in the deployed app and confirm:
+   - Stripe redirects back to the deployed domain (not localhost)
+   - Analysis unlocks after checkout
+   - Plan/Billing status displays correctly

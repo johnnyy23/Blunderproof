@@ -23,7 +23,22 @@ export function getStripe(): Stripe {
 }
 
 export function getStripeAppUrl(origin?: string): string {
-  return process.env.NEXT_PUBLIC_APP_URL || origin || "http://localhost:3000";
+  const explicit = process.env.NEXT_PUBLIC_APP_URL;
+
+  if (explicit) {
+    return explicit;
+  }
+
+  if (origin) {
+    return origin;
+  }
+
+  const vercelUrl = process.env.VERCEL_URL;
+  if (vercelUrl) {
+    return `https://${vercelUrl}`;
+  }
+
+  return "http://localhost:3000";
 }
 
 export function resolvePriceForSelection(selection: CheckoutSelection): { priceId: string; label: string } {
