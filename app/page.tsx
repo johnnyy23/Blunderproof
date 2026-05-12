@@ -6,7 +6,6 @@ import { AffiliateAdminPage } from "@/components/AffiliateAdminPage";
 import { AppSidebar, type AppPage } from "@/components/AppSidebar";
 import { Chessboard, getSelectableMoves } from "@/components/Chessboard";
 import type { BoardAnnotations } from "@/components/BoardAnnotations";
-import { ComingSoonPage } from "@/components/ComingSoonPage";
 import { CommunityPage } from "@/components/CommunityPage";
 import { CommunityCourseShelf } from "@/components/CommunityCourseShelf";
 import { CourseCatalog } from "@/components/CourseCatalog";
@@ -256,57 +255,8 @@ function buildReplaySnapshots(line: TrainingLine): BoardState[] {
   return snapshots;
 }
 
-function detectPublicLaunchLock(): boolean | null {
-  if (typeof window === "undefined") {
-    return null;
-  }
-
-  const host = window.location.hostname.toLowerCase();
-  const isLocalHost =
-    host === "localhost" ||
-    host === "127.0.0.1" ||
-    host === "::1" ||
-    host.endsWith(".local");
-
-  return !isLocalHost;
-}
-
-function formatRelativeTimestamp(value?: string): string | null {
-  if (!value) {
-    return null;
-  }
-
-  const timestamp = Date.parse(value);
-  if (!Number.isFinite(timestamp)) {
-    return null;
-  }
-
-  const deltaMs = Date.now() - timestamp;
-  if (!Number.isFinite(deltaMs) || deltaMs < 0) {
-    return "just now";
-  }
-
-  const deltaSeconds = Math.floor(deltaMs / 1000);
-  if (deltaSeconds < 60) {
-    return "just now";
-  }
-
-  const deltaMinutes = Math.floor(deltaSeconds / 60);
-  if (deltaMinutes < 60) {
-    return `${deltaMinutes}m ago`;
-  }
-
-  const deltaHours = Math.floor(deltaMinutes / 60);
-  if (deltaHours < 24) {
-    return `${deltaHours}h ago`;
-  }
-
-  const deltaDays = Math.floor(deltaHours / 24);
-  return `${deltaDays}d ago`;
-}
-
 export default function Home() {
-  const [currentPage, setCurrentPage] = useState<HomeView>("landing");
+  const [currentPage, setCurrentPage] = useState<HomeView>("courses");
   const [authEntryMode, setAuthEntryMode] = useState<"signin" | "signup">("signin");
   const [activeAnalysisSection, setActiveAnalysisSection] = useState("overview");
   const [isCompactCourseSidebar, setIsCompactCourseSidebar] = useState(false);
@@ -347,6 +297,7 @@ export default function Home() {
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [localProfile, setLocalProfile] = useState<LocalProfile>({ name: "Blounderproof player", email: "" });
   const [authUser, setAuthUser] = useState<AuthUser | null>(null);
+  const [authPrompt, setAuthPrompt] = useState("");
   const [referralAttribution, setReferralAttribution] = useState<ReferralBanner>(null);
   const [profileSettingsPanel, setProfileSettingsPanel] = useState<ProfileSettingsPanel>(null);
   const [boardThemeId, setBoardThemeId] = useState("classic");
@@ -361,7 +312,6 @@ export default function Home() {
   const [isSavingMembership, setIsSavingMembership] = useState(false);
   const [showCompletionConfetti, setShowCompletionConfetti] = useState(false);
   const [completionConfettiKey, setCompletionConfettiKey] = useState(0);
-  const [isPublicLaunchLock, setIsPublicLaunchLock] = useState<boolean | null>(() => detectPublicLaunchLock());
   const [remoteProgressByLine, setRemoteProgressByLine] = useState<Record<string, RemoteUserProgress>>({});
   const [remoteProgressAllByLine, setRemoteProgressAllByLine] = useState<Record<string, RemoteUserProgress>>({});
   const progressSaveTimeoutRef = useRef<number | null>(null);
@@ -386,7 +336,7 @@ export default function Home() {
 
     return sorted[0] ?? null;
   }, [remoteProgressAllByLine]);
-  const lastProgressRelative = useMemo(() => formatRelativeTimestamp(lastProgressEntry?.updated_at), [lastProgressEntry?.updated_at]);
+
   const isLineComplete = status === "correct" && moveIndex === activeLine.moves.length - 1;
   const displayedBoardState = replayIndex !== null ? replaySnapshots[Math.min(replayIndex, replaySnapshots.length - 1)] ?? boardState : boardState;
   const dueLinesForCourse = useMemo(() => getDueLines(activeCourse, progress), [activeCourse, progress]);
@@ -738,10 +688,6 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
-    setIsPublicLaunchLock(detectPublicLaunchLock());
-  }, []);
-
-  useEffect(() => {
     if (hasLoadedProgress) {
       saveStoredProgress(progress);
       saveImportedCourses(importedCourses);
@@ -820,7 +766,7 @@ export default function Home() {
   function loadLine(nextCourseId: string, nextLineIndexValue: number) {
     const course = allCourses.find((item) => item.id === nextCourseId) ?? allCourses[0];
     const line = course.lines[nextLineIndexValue] ?? course.lines[0];
-    const remote = remoteProgressByLine[`${course.id}:${line.id}`];
+    const remote = remoteProgressByLine[`${course.id}:${line.id}`] ?? remoteProgressAllByLine[`${course.id}:${line.id}`];
     const restoredMoveIndex =
       typeof remote?.last_move_index === "number" ? Math.max(0, Math.min(remote.last_move_index, line.moves.length - 1)) : 0;
     const preparedLine = restoredMoveIndex > 0 ? prepareLineAtMove(line, restoredMoveIndex) : applyPrelude(line);
@@ -915,6 +861,7 @@ export default function Home() {
 
   function handleAuthChange(user: AuthUser | null) {
     setAuthUser(user);
+    setAuthPrompt("");
     setMembershipMessage("");
     setMembershipError("");
 
@@ -925,13 +872,14 @@ export default function Home() {
       });
       setCurrentPage("courses");
     } else {
-      setCurrentPage("landing");
+      setCurrentPage("courses");
     }
 
     setProfileSettingsPanel(null);
   }
 
   function handleOpenSignup(prefilledEmail?: string) {
+    setAuthPrompt("");
     if (prefilledEmail?.trim()) {
       setLocalProfile((current) => ({
         ...current,
@@ -946,6 +894,11 @@ export default function Home() {
   function handleOpenLogin() {
     setAuthEntryMode("signin");
     setCurrentPage("profile");
+  }
+
+  function promptSignIn(message: string) {
+    setAuthPrompt(message);
+    handleOpenLogin();
   }
 
   async function handleMembershipSave() {
@@ -1236,6 +1189,11 @@ export default function Home() {
   }
 
   function handleSquareClick(square: Square) {
+    if (!authUser) {
+      promptSignIn("Sign in to train and save your progress.");
+      return;
+    }
+
     if (status === "correct") {
       return;
     }
@@ -1390,6 +1348,11 @@ export default function Home() {
   }
 
   function handleHint() {
+    if (!authUser) {
+      promptSignIn("Sign in to train and save your progress.");
+      return;
+    }
+
     const { from } = parseUciMove(currentMove.uci);
     setHintedSquare(from);
     setRevealedSquare(null);
@@ -1398,6 +1361,11 @@ export default function Home() {
   }
 
   function handleReveal() {
+    if (!authUser) {
+      promptSignIn("Sign in to train and save your progress.");
+      return;
+    }
+
     const { from, to, promotion } = parseUciMove(currentMove.uci);
     const result = makeMove(boardState.board, from, to, { promotion, castlingRights: boardState.castlingRights, enPassantTarget: boardState.enPassantTarget });
 
@@ -1667,19 +1635,6 @@ export default function Home() {
   ];
   const showTopNavigation = currentPage !== "course" && currentPage !== "analysis";
 
-  if (isPublicLaunchLock !== false) {
-    return <ComingSoonPage isWaitlistOnly onGetEarlyAccess={handleOpenSignup} onLogin={handleOpenLogin} />;
-  }
-
-  if (currentPage === "landing") {
-    return (
-      <ComingSoonPage
-        onGetEarlyAccess={handleOpenSignup}
-        onLogin={handleOpenLogin}
-      />
-    );
-  }
-
   return (
     <>
       {currentPage === "course" || currentPage === "analysis" ? (
@@ -1694,7 +1649,8 @@ export default function Home() {
           activeCourseId={activeCourse.id}
           activeLineId={activeLine.id}
           progress={progress}
-          onSelectLesson={handleSelectLesson}analysisSections={analysisSections}
+          onSelectLesson={handleSelectLesson}
+          analysisSections={analysisSections}
           activeAnalysisSection={activeAnalysisSection}
           onSelectAnalysisSection={setActiveAnalysisSection}
         />
@@ -1867,9 +1823,6 @@ export default function Home() {
                         </span>
                         .
                       </p>
-                      {lastProgressRelative ? (
-                        <p className="mt-2 text-xs text-emerald-100/90">Last trained {lastProgressRelative}</p>
-                      ) : null}
                     </div>
                     <button
                       type="button"
@@ -2121,6 +2074,12 @@ export default function Home() {
                   <StatCard label="Free trial" value="7 days" detail="Train with the full product before billing is wired." />
                   <StatCard label="Getting started" value="Under 1 min" detail="Create the account and jump into the app flow quickly." />
                   <StatCard label="No card needed" value="For now" detail="Stripe trial activation will connect here later." />
+                </section>
+              ) : null}
+
+              {!authUser && authPrompt ? (
+                <section className="rounded-lg border border-emerald-300/20 bg-emerald-300/10 p-4 text-sm text-zinc-200">
+                  {authPrompt}
                 </section>
               ) : null}
 
