@@ -9,10 +9,32 @@ type CheckoutSelection = {
 };
 
 export function getStripe(): Stripe {
-  const secretKey = process.env.STRIPE_SECRET_KEY;
+  const rawSecretKey = process.env.STRIPE_SECRET_KEY;
 
-  if (!secretKey) {
+  if (!rawSecretKey) {
     throw new Error("Stripe is not configured yet. Add STRIPE_SECRET_KEY to your environment.");
+  }
+
+  const secretKey = rawSecretKey.trim();
+
+  if (secretKey !== rawSecretKey) {
+    throw new Error("STRIPE_SECRET_KEY has leading/trailing whitespace. Re-save it without spaces.");
+  }
+
+  if (secretKey.includes("*")) {
+    throw new Error(
+      "STRIPE_SECRET_KEY looks masked (contains '*'). In Stripe Dashboard (Test mode) go to Developers → API keys, click Reveal test key, then copy the full Secret key."
+    );
+  }
+
+  if (secretKey.includes("prod_")) {
+    throw new Error(
+      "STRIPE_SECRET_KEY contains 'prod_' which is not a valid Stripe secret key. Copy the full Test Secret key from Stripe Dashboard (Developers → API keys) and paste it exactly."
+    );
+  }
+
+  if (!secretKey.startsWith("sk_")) {
+    throw new Error("STRIPE_SECRET_KEY must start with 'sk_'. Paste your Stripe Secret key, not the publishable key.");
   }
 
   if (!stripeClient) {
