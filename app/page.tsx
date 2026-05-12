@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AnalysisPage } from "@/components/AnalysisPage";
@@ -10,6 +10,7 @@ import { CommunityPage } from "@/components/CommunityPage";
 import { CommunityCourseShelf } from "@/components/CommunityCourseShelf";
 import { CourseCatalog } from "@/components/CourseCatalog";
 import { CourseLeaderboardCard, LeaderboardPage } from "@/components/LeaderboardPage";
+import { LandingPage } from "@/components/LandingPage";
 import { ManualCourseBuilder } from "@/components/ManualCourseBuilder";
 import { PgnImporter } from "@/components/PgnImporter";
 import { ProfileAccountSection } from "@/components/ProfileAccountSection";
@@ -256,7 +257,7 @@ function buildReplaySnapshots(line: TrainingLine): BoardState[] {
 }
 
 export default function Home() {
-  const [currentPage, setCurrentPage] = useState<HomeView>("courses");
+  const [currentPage, setCurrentPage] = useState<HomeView>("landing");
   const [authEntryMode, setAuthEntryMode] = useState<"signin" | "signup">("signin");
   const [activeAnalysisSection, setActiveAnalysisSection] = useState("overview");
   const [isCompactCourseSidebar, setIsCompactCourseSidebar] = useState(false);
@@ -1625,7 +1626,9 @@ export default function Home() {
       ? "due review"
       : `${activeLineProgress.streak} correct streak`
     : `${activeLine.dueLevel} line`;
-  const topNavigationItems: Array<{ page: AppPage; label: string; isActive: boolean }> = [
+  const featuredCourse = useMemo(() => allCourses.find((course) => course.repertoire === "white") ?? allCourses[0], [allCourses]);
+const topNavigationItems: Array<{ page: HomeView; label: string; isActive: boolean }> = [
+    { page: "landing", label: "Home", isActive: currentPage === "landing" },
     { page: "courses", label: "Courses", isActive: currentPage === "courses" || currentPage === "course" },
     { page: "analysis", label: "Analysis", isActive: currentPage === "analysis" },
     { page: "create", label: "Create a course", isActive: currentPage === "create" },
@@ -1681,7 +1684,7 @@ export default function Home() {
             ) : (
               <button
                 type="button"
-                onClick={() => setCurrentPage("courses")}
+                onClick={() => setCurrentPage("landing")}
                 className="flex items-center gap-3 justify-self-start rounded-xl border border-white/10 bg-white/[0.03] px-3 py-3 text-left transition hover:bg-white/[0.05]"
               >
                 <img
@@ -1782,7 +1785,14 @@ export default function Home() {
             </div>
           </div>
 
-          {currentPage === "courses" ? (
+          {currentPage === "landing" ? (
+            <LandingPage
+              featuredCourse={featuredCourse}
+              onStartFreeTrial={() => handleOpenSignup()}
+              onViewCourses={() => setCurrentPage("courses")}
+              onLogin={handleOpenLogin}
+            />
+          ) : currentPage === "courses" ? (
             <>
               <section className="rounded-lg border border-white/10 bg-zinc-950/55 p-5">
                 <div className="flex flex-wrap items-end justify-between gap-4">
@@ -2774,7 +2784,7 @@ function CompletionConfetti() {
             ["--bp-star-drift" as string]: star.drift
           }}
         >
-          ★
+          â˜…
         </span>
       ))}
     </div>
@@ -2826,3 +2836,4 @@ function ProfileBoardPreview({ board, theme }: { board: Board; theme: BoardTheme
     </div>
   );
 }
+
