@@ -1,6 +1,6 @@
-import { createHash, randomBytes } from "crypto";
-import { mkdir, readFile, writeFile } from "fs/promises";
-import path from "path";
+﻿import { createHash, randomBytes } from "crypto";
+
+import { supabaseAdmin } from "@/lib/supabase/server";
 import { listUsersForAffiliateStats, type AffiliateAttribution as UserAffiliateAttribution } from "@/lib/auth";
 
 export const referralCookieName = "blounderproof_referral";
@@ -43,11 +43,6 @@ export type ReferralAttribution = {
   expiresAt: string;
 };
 
-type AffiliateStore = {
-  affiliates: Affiliate[];
-  clicks: AffiliateClick[];
-};
-
 export type AffiliateSummary = {
   affiliate: Affiliate;
   clickCount: number;
@@ -81,7 +76,7 @@ type CaptureReferralVisitInput = {
   existingAttribution?: ReferralAttribution | null;
 };
 
-const affiliateStorePath = path.join(process.cwd(), "data", "affiliate-store.json");
+const clicksTable = "affiliate_clicks";
 
 const defaultAffiliates: Affiliate[] = [
   {
@@ -106,43 +101,6 @@ const defaultAffiliates: Affiliate[] = [
   }
 ];
 
-async function ensureAffiliateStore(): Promise<void> {
-  await mkdir(path.dirname(affiliateStorePath), { recursive: true });
-
-  try {
-    await readFile(affiliateStorePath, "utf8");
-  } catch {
-    await writeFile(
-      affiliateStorePath,
-      JSON.stringify(
-        {
-          affiliates: defaultAffiliates,
-          clicks: []
-        },
-        null,
-        2
-      ),
-      "utf8"
-    );
-  }
-}
-
-async function readAffiliateStore(): Promise<AffiliateStore> {
-  await ensureAffiliateStore();
-  const raw = await readFile(affiliateStorePath, "utf8");
-  const parsed = JSON.parse(raw) as Partial<AffiliateStore>;
-
-  return {
-    affiliates: Array.isArray(parsed.affiliates) ? parsed.affiliates.map(sanitizeAffiliate) : [...defaultAffiliates],
-    clicks: Array.isArray(parsed.clicks) ? parsed.clicks.map(sanitizeClick) : []
-  };
-}
-
-async function writeAffiliateStore(store: AffiliateStore): Promise<void> {
-  await ensureAffiliateStore();
-  await writeFile(affiliateStorePath, JSON.stringify(store, null, 2), "utf8");
-}
-
 function sanitizeAffiliate(affiliate: Affiliate): Affiliate {
   return {
     ...affiliate,
@@ -166,6 +124,23 @@ function sanitizeClick(click: AffiliateClick): AffiliateClick {
     utmContent: click.utmContent ?? null,
     utmTerm: click.utmTerm ?? null
   };
+}
+
+function clickFromRow(row: any): AffiliateClick {
+  return sanitizeClick({
+    id: row.id,
+    affiliateId: row.affiliate_id,
+    referralCode: row.referral_code,
+    landingPage: row.landing_page,
+    ipHash: row.ip_hash,
+    userAgent: row.user_agent,
+    utmSource: row.utm_source ?? null,
+    utmMedium: row.utm_medium ?? null,
+    utmCampaign: row.utm_campaign ?? null,
+    utmContent: row.utm_content ?? null,
+    utmTerm: row.utm_term ?? null,
+    clickedAt: row.clicked_at
+  });
 }
 
 export function normalizeReferralCode(code: string): string {
@@ -225,13 +200,13 @@ export async function getAffiliateByCode(code: string): Promise<Affiliate | null
     return null;
   }
 
-  const store = await readAffiliateStore();
-  return store.affiliates.find((affiliate) => affiliate.status === "active" && affiliate.referralCode === normalizedCode) ?? null;
+  return (
+    defaultAffiliates.map(sanitizeAffiliate).find((affiliate) => affiliate.status === "active" && affiliate.referralCode === normalizedCode) ?? null
+  );
 }
 
 export async function getAffiliateById(id: string): Promise<Affiliate | null> {
-  const store = await readAffiliateStore();
-  return store.affiliates.find((affiliate) => affiliate.id === id) ?? null;
+  return defaultAffiliates.map(sanitizeAffiliate).find((affiliate) => affiliate.id === id) ?? null;
 }
 
 export async function captureReferralVisit(input: CaptureReferralVisitInput): Promise<ReferralCaptureResult> {
@@ -246,8 +221,8 @@ export async function captureReferralVisit(input: CaptureReferralVisitInput): Pr
     };
   }
 
-  const store = await readAffiliateStore();
-  const affiliate = store.affiliates.find((entry) => entry.status === "active" && entry.referralCode === normalizedCode) ?? null;
+  const affiliate =
+    defaultAffiliates.map(sanitizeAffiliate).find((entry) => entry.status === "active" && entry.referralCode === normalizedCode) ?? null;
 
   if (!affiliate) {
     return {
@@ -273,15 +248,29 @@ export async function captureReferralVisit(input: CaptureReferralVisitInput): Pr
     clickedAt: new Date().toISOString()
   };
 
-  store.clicks.push(click);
-  await writeAffiliateStore(store);
+  const { error } = await supabaseAdmin.from(clicksTable).insert({
+    id: click.id,
+    affiliate_id: click.affiliateId,
+    referral_code: click.referralCode,
+    landing_page: click.landingPage,
+    ip_hash: click.ipHash,
+    user_agent: click.userAgent,
+    utm_source: click.utmSource,
+    utm_medium: click.utmMedium,
+    utm_campaign: click.utmCampaign,
+    utm_content: click.utmContent,
+    utm_term: click.utmTerm,
+    clicked_at: click.clickedAt
+  });
+
+  const didRecordClick = !error;
 
   if (input.existingAttribution && !isAttributionExpired(input.existingAttribution)) {
     return {
       affiliate,
       attribution: input.existingAttribution,
       isFirstTouch: false,
-      didRecordClick: true
+      didRecordClick
     };
   }
 
@@ -299,7 +288,7 @@ export async function captureReferralVisit(input: CaptureReferralVisitInput): Pr
     affiliate,
     attribution,
     isFirstTouch: true,
-    didRecordClick: true
+    didRecordClick
   };
 }
 
@@ -331,28 +320,42 @@ export function toUserAffiliateAttribution(attribution: ReferralAttribution): Us
 }
 
 export async function listAffiliateSummaries(): Promise<AffiliateSummary[]> {
-  const [store, users] = await Promise.all([readAffiliateStore(), listUsersForAffiliateStats()]);
+  const users = await listUsersForAffiliateStats();
 
-  return store.affiliates.map((affiliate) => {
-    const referredUsers = users.filter((user) => user.affiliateId === affiliate.id);
-    const recentClicks = store.clicks
-      .filter((click) => click.affiliateId === affiliate.id)
-      .sort((left, right) => new Date(right.clickedAt).getTime() - new Date(left.clickedAt).getTime())
-      .slice(0, 8);
+  const affiliates = defaultAffiliates.map(sanitizeAffiliate);
 
-    return {
-      affiliate,
-      clickCount: store.clicks.filter((click) => click.affiliateId === affiliate.id).length,
-      signupCount: referredUsers.length,
-      recentClicks,
-      referredUsers: referredUsers.map((user) => ({
-        id: user.id,
-        email: anonymizeEmail(user.email),
-        createdAt: user.createdAt,
-        referredAt: user.referredAt
-      }))
-    };
-  });
+  const summaries = await Promise.all(
+    affiliates.map(async (affiliate) => {
+      const referredUsers = users.filter((user) => user.affiliateId === affiliate.id);
+
+      const [{ count }, recentClicksResult] = await Promise.all([
+        supabaseAdmin.from(clicksTable).select("id", { count: "exact", head: true }).eq("affiliate_id", affiliate.id),
+        supabaseAdmin
+          .from(clicksTable)
+          .select("*")
+          .eq("affiliate_id", affiliate.id)
+          .order("clicked_at", { ascending: false })
+          .limit(8)
+      ]);
+
+      const recentClicks = (recentClicksResult.data ?? []).map(clickFromRow);
+
+      return {
+        affiliate,
+        clickCount: count ?? 0,
+        signupCount: referredUsers.length,
+        recentClicks,
+        referredUsers: referredUsers.map((user) => ({
+          id: user.id,
+          email: anonymizeEmail(user.email),
+          createdAt: user.createdAt,
+          referredAt: user.referredAt
+        }))
+      };
+    })
+  );
+
+  return summaries;
 }
 
 function anonymizeEmail(email: string): string {
