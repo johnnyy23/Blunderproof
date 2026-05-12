@@ -2550,12 +2550,50 @@ const topNavigationItems: Array<{ page: HomeView; label: string; isActive: boole
             </>
           ) : (
             <>
-              <AnalysisPage
-                activeSection={activeAnalysisSection}
-                onOpenCourseSuggestion={handleOpenCourseSuggestion}
-                onOpenWeaknessTarget={handleOpenWeaknessTarget}
-                availableCourses={allCourses}
-              />
+              {authUser && (authUser.billingState === "trial" || authUser.billingState === "active") ? (
+                <AnalysisPage
+                  activeSection={activeAnalysisSection}
+                  onOpenCourseSuggestion={handleOpenCourseSuggestion}
+                  onOpenWeaknessTarget={handleOpenWeaknessTarget}
+                  availableCourses={allCourses}
+                />
+              ) : (
+                <section className="rounded-lg border border-cyan-200/20 bg-cyan-200/5 p-6">
+                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-cyan-200">Pro feature</p>
+                  <h1 className="mt-2 text-2xl font-semibold text-white">Start your 7-day free trial to unlock analysis</h1>
+                  <p className="mt-2 text-sm leading-6 text-zinc-400">No charge today. Cancel anytime before renewal.</p>
+                  <div className="mt-5 flex flex-wrap gap-3">
+                    {!authUser ? (
+                      <button
+                        type="button"
+                        onClick={() => handleOpenSignup()}
+                        className="rounded-md border border-cyan-200/40 bg-[#007BFF] px-6 py-3 text-sm font-semibold text-white shadow-[0_0_18px_rgba(54,208,255,0.25)] transition hover:bg-[#36D0FF]"
+                      >
+                        Start Free Trial
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setMembershipPlanDraft("pro");
+                          setMembershipBillingCycleDraft("monthly");
+                          void handleStripeCheckout();
+                        }}
+                        className="rounded-md border border-cyan-200/40 bg-[#007BFF] px-6 py-3 text-sm font-semibold text-white shadow-[0_0_18px_rgba(54,208,255,0.25)] transition hover:bg-[#36D0FF]"
+                      >
+                        Start Free Trial
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => setCurrentPage("courses")}
+                      className="rounded-md border border-white/10 bg-white/[0.03] px-6 py-3 text-sm font-semibold text-zinc-300 transition hover:bg-white/[0.05]"
+                    >
+                      Back to courses
+                    </button>
+                  </div>
+                </section>
+              )}
             </>
           )}
         </div>
