@@ -466,6 +466,75 @@ export async function updateStripeCheckoutForUser(userId: string, update: Stripe
   return toPublicUser(user);
 }
 
+
+function isoFromUnixSeconds(value: number | null | undefined): string | null {
+  if (!value || !Number.isFinite(value)) {
+    return null;
+  }
+
+  return new Date(value * 1000).toISOString();
+}
+
+function billingStateFromStripeStatus(status: string | null | undefined): BillingState {
+  if (status === "trialing") return "trial";
+  if (status === "active") return "active";
+  if (status === "past_due" || status === "unpaid") return "past_due";
+  if (status === "canceled" || status === "incomplete_expired") return "canceled";
+  return "checkout_pending";
+}
+
+export type StripeSubscriptionSnapshot = {
+  stripeCustomerId: string | null;
+  stripeSubscriptionId: string | null;
+  subscriptionStatus: string | null;
+  cancelAtPeriodEnd?: boolean | null;
+  trialEndUnix?: number | null;
+  currentPeriodEndUnix?: number | null;
+  membershipPlan?: MembershipPlan;
+  billingCycle?: BillingCycle | null;
+  billingEmail?: string | null;
+};
+
+export async function applyStripeSubscriptionSnapshot(userId: string, snapshot: StripeSubscriptionSnapshot): Promise<AuthUser> {
+  const store = await readAuthStore();
+  const user = store.users.find((entry) => entry.id === userId);
+
+  if (!user) {
+    throw new Error("Account not found.");
+  }
+
+  if (typeof snapshot.membershipPlan !== "undefined" && snapshot.membershipPlan) {
+    user.membershipPlan = snapshot.membershipPlan;
+  }
+
+  if (typeof snapshot.billingCycle !== "undefined") {
+    user.billingCycle = snapshot.billingCycle;
+  }
+
+  if (typeof snapshot.billingEmail === "string" && snapshot.billingEmail.trim()) {
+    user.billingEmail = normalizeEmail(snapshot.billingEmail);
+  }
+
+  user.stripeCustomerId = snapshot.stripeCustomerId;
+  user.stripeSubscriptionId = snapshot.stripeSubscriptionId;
+
+  const trialEndsAt = isoFromUnixSeconds(snapshot.trialEndUnix ?? null);
+  if (trialEndsAt) {
+    user.trialEndsAt = trialEndsAt;
+  }
+
+  user.billingStartedAt = user.billingStartedAt ?? new Date().toISOString();
+
+  const derivedBillingState = billingStateFromStripeStatus(snapshot.subscriptionStatus);
+  user.billingState = derivedBillingState;
+
+  const hasTrial = hasActiveTrial(user);
+  user.membershipStatus = derivedBillingState === "trial" || hasTrial ? "trialing" : "active";
+
+  await writeAuthStore(store);
+  return toPublicUser(user);
+}
+
 export type UserAffiliateStatsRecord = {
   id: string;
   email: string;

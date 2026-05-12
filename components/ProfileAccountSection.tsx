@@ -71,6 +71,21 @@ export function ProfileAccountSection({
     }
   }, [currentUser, preferredMode]);
 
+  async function startTrialCheckout(billingEmail: string) {
+    const response = await fetch("/api/auth/checkout", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ plan: "pro", billingCycle: "monthly", billingEmail })
+    });
+    const payload = (await response.json()) as { checkoutUrl?: string; error?: string };
+
+    if (!response.ok || !payload.checkoutUrl) {
+      throw new Error(payload.error || "Could not open Stripe checkout.");
+    }
+
+    window.location.href = payload.checkoutUrl;
+  }
+
   async function handleAuthSubmit() {
     setErrorMessage("");
     setStatusMessage("");
@@ -103,6 +118,10 @@ export function ProfileAccountSection({
       setStatusMessage(mode === "signup" ? "Account created." : "Signed in.");
       setPassword("");
       setConfirmPassword("");
+
+      if (mode === "signup" && preferredMode === "signup") {
+        await startTrialCheckout(payload.user.billingEmail || email);
+      }
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : "Something went wrong.");
     } finally {
@@ -169,6 +188,27 @@ export function ProfileAccountSection({
     }
   }
 
+  async function handleOpenBillingPortal() {
+    setErrorMessage("");
+    setStatusMessage("");
+    setIsSaving(true);
+
+    try {
+      const response = await fetch("/api/auth/portal", { method: "POST" });
+      const payload = (await response.json()) as { url?: string; error?: string };
+
+      if (!response.ok || !payload.url) {
+        throw new Error(payload.error || "Could not open Stripe customer portal.");
+      }
+
+      window.location.href = payload.url;
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "Could not open customer portal.");
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
   async function handleSignOut() {
     setErrorMessage("");
     setStatusMessage("");
@@ -220,7 +260,7 @@ export function ProfileAccountSection({
                   </p>
                 </div>
                 <span className="rounded-full border border-emerald-200/20 bg-black/15 px-2 py-1 text-[11px] font-semibold text-emerald-100">
-                  No credit card required
+                  No charge today
                 </span>
               </div>
               <div className="mt-4 grid gap-2 text-sm text-emerald-50/90 sm:grid-cols-3">
@@ -337,7 +377,7 @@ export function ProfileAccountSection({
               <>
                 <span className="rounded-full border border-white/10 px-2 py-1">Takes under a minute</span>
                 <span className="rounded-full border border-white/10 px-2 py-1">Full product access during trial</span>
-                <span className="rounded-full border border-white/10 px-2 py-1">Stripe trial hookup comes next</span>
+                <span className="rounded-full border border-white/10 px-2 py-1">Cancel anytime</span>
               </>
             ) : (
               <>
@@ -349,7 +389,7 @@ export function ProfileAccountSection({
 
           {mode === "signup" ? (
             <p className="mt-3 text-xs leading-5 text-zinc-500">
-              This starts your account and marks the 7-day trial in the app now. Stripe checkout will connect right after this flow later.
+              We will collect payment details to start your 7-day free trial. No charge today, and you can cancel anytime before renewal.
             </p>
           ) : (
             <p className="mt-3 text-xs leading-5 text-zinc-500">
@@ -370,6 +410,16 @@ export function ProfileAccountSection({
                 </p>
               </div>
               <div className="flex flex-wrap gap-2">
+            {currentUser.stripeCustomerId ? (
+              <button
+                type="button"
+                onClick={handleOpenBillingPortal}
+                disabled={isSaving}
+                className="rounded-md bg-[#007BFF] px-4 py-3 text-sm font-semibold text-white shadow-[0_0_18px_rgba(54,208,255,0.25)] transition hover:bg-[#36D0FF] disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Manage subscription
+              </button>
+            ) : null}
                 <span className="rounded-full border border-white/10 px-2 py-1 text-[11px] font-semibold uppercase tracking-wide text-zinc-300">
                   {currentUser.membershipPlan} plan
                 </span>
@@ -380,7 +430,7 @@ export function ProfileAccountSection({
             </div>
             <div className="mt-3 flex flex-wrap gap-2 text-[11px] text-zinc-400">
               <span className="rounded-full border border-white/10 px-2 py-1">No charge captured yet</span>
-              <span className="rounded-full border border-white/10 px-2 py-1">Stripe checkout plugs in next</span>
+              <span className="rounded-full border border-white/10 px-2 py-1">Manage in Stripe portal</span>
               {currentUser.stripeCustomerId ? (
                 <span className="rounded-full border border-white/10 px-2 py-1">Customer linked</span>
               ) : (

@@ -3,8 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import {
   getUserFromSessionToken,
   sessionCookieName,
-  updateMembership,
-  updateStripeCheckoutForUser,
+updateStripeCheckoutForUser,
   type BillingCycle,
   type MembershipPlan
 } from "@/lib/auth";
@@ -32,11 +31,7 @@ export async function POST(request: NextRequest) {
 
     if (selectedPlan === "free") {
       return NextResponse.json({ error: "Choose a paid plan before opening checkout." }, { status: 400 });
-    }
-
-    await updateMembership(token, selectedPlan, billingEmail, selectedCycle);
-
-    const stripe = getStripe();
+    }    const stripe = getStripe();
     const { priceId, label } = resolvePriceForSelection({
       plan: selectedPlan,
       billingCycle: selectedCycle
@@ -83,6 +78,7 @@ export async function POST(request: NextRequest) {
     const trialEnd = isFutureUnixTimestamp(currentUser.trialEndsAt);
 
     const session = await stripe.checkout.sessions.create({
+      payment_method_collection: "always",
       mode: "subscription",
       success_url: `${appUrl}/?checkout=success&session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${appUrl}/?checkout=cancel`,
@@ -110,7 +106,7 @@ export async function POST(request: NextRequest) {
           affiliateId: currentUser.affiliateId ?? "",
           referralCode: currentUser.referralCode ?? ""
         },
-        ...(trialEnd ? { trial_end: trialEnd } : {})
+        ...(trialEnd ? { trial_end: trialEnd } : { trial_period_days: 7 })
       }
     });
 

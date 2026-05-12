@@ -295,7 +295,7 @@ export function LandingPage({ featuredCourse, onStartFreeTrial, onViewCourses, o
                   <p className="text-sm font-semibold text-white">Free Trial</p>
                   <p className="mt-3 text-3xl font-semibold text-white">7 days</p>
                   <p className="mt-1 text-sm text-zinc-400">to explore the platform</p>
-                  <p className="mt-4 text-sm leading-6 text-zinc-400">No credit card required for free trial.</p>
+                  <p className="mt-4 text-sm leading-6 text-zinc-400">7-day free trial. No charge today. Cancel anytime before renewal.</p>
                 </div>
               </div>
             </div>
