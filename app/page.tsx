@@ -553,7 +553,9 @@ export default function Home() {
     }
 
     const url = new URL(window.location.href);
-    const checkoutState = url.searchParams.get("checkout");
+    const sessionIdParam = url.searchParams.get("session_id");
+    const checkoutStateRaw = url.searchParams.get("checkout");
+    const checkoutState = checkoutStateRaw ?? (sessionIdParam ? "success" : null);
 
     if (checkoutState === "cancel") {
       setCurrentPage("profile");
@@ -568,7 +570,7 @@ export default function Home() {
       return;
     }
 
-    const sessionId = url.searchParams.get("session_id");
+    const sessionId = sessionIdParam;
 
     if (!sessionId) {
       setMembershipError("Stripe came back without a session ID. Try checkout again.");

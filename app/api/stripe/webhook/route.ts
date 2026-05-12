@@ -3,6 +3,11 @@ import { supabaseAdmin } from "@/lib/supabase/server";
 import { applyStripeSubscriptionSnapshot } from "@/lib/auth";
 import { getStripe } from "@/lib/stripe";
 
+export async function GET() {
+  const hasWebhookSecret = Boolean(process.env.STRIPE_WEBHOOK_SECRET);
+  return NextResponse.json({ ok: true, hasWebhookSecret });
+}
+
 export async function POST(request: Request) {
   const stripe = getStripe();
   const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
