@@ -1700,22 +1700,37 @@ const topNavigationItems: Array<{ page: HomeView; label: string; isActive: boole
             )}
 
             {showTopNavigation ? (
-              <div className="flex flex-wrap items-center justify-center gap-2 lg:px-6">
-                {topNavigationItems.map((item) => (
-                  <button
-                    key={item.page}
-                    type="button"
-                    onClick={() => setCurrentPage(item.page)}
-                    className={[
-                      "rounded-md border px-4 py-2 text-sm font-semibold transition",
-                      item.isActive
-                        ? "border-emerald-300/35 bg-emerald-300/10 text-emerald-100"
-                        : "border-white/10 bg-white/[0.03] text-zinc-300 hover:bg-white/[0.05]"
-                    ].join(" ")}
-                  >
-                    {item.label}
-                  </button>
-                ))}
+              <div className="flex flex-col items-center justify-center gap-2 lg:px-6">
+                <div className="flex flex-wrap items-center justify-center gap-2">
+                  {topNavigationItems
+                    .filter((item) => item.page !== "landing")
+                    .map((item) => (
+                      <button
+                        key={item.page}
+                        type="button"
+                        onClick={() => setCurrentPage(item.page)}
+                        className={[
+                          "rounded-md border px-4 py-2 text-sm font-semibold transition",
+                          item.isActive
+                            ? "border-emerald-300/35 bg-emerald-300/10 text-emerald-100"
+                            : "border-white/10 bg-white/[0.03] text-zinc-300 hover:bg-white/[0.05]"
+                        ].join(" ")}
+                      >
+                        {item.label}
+                      </button>
+                    ))}
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setCurrentPage("landing")}
+                  className={[
+                    "rounded-md border border-emerald-200/40 bg-emerald-300 px-8 py-2.5 text-sm font-semibold text-zinc-950 shadow-sm transition hover:bg-emerald-200",
+                    currentPage === "landing" ? "ring-2 ring-emerald-200/40" : ""
+                  ].join(" ")}
+                >
+                  Start Free Trial
+                </button>
               </div>
             ) : null}
 
