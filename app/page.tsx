@@ -1725,8 +1725,8 @@ const topNavigationItems: Array<{ page: HomeView; label: string; isActive: boole
                   type="button"
                   onClick={() => setCurrentPage("landing")}
                   className={[
-                    "rounded-md border border-sky-200/40 bg-sky-400 px-8 py-2.5 text-sm font-semibold text-zinc-950 shadow-sm transition hover:bg-sky-300",
-                    currentPage === "landing" ? "ring-2 ring-sky-200/50" : ""
+                    "rounded-md border border-cyan-200/40 bg-sky-500 px-8 py-2.5 text-sm font-semibold text-white shadow-[0_0_18px_rgba(54,208,255,0.25)] transition hover:bg-[#36D0FF]",
+                    currentPage === "landing" ? "ring-2 ring-cyan-200/60" : ""
                   ].join(" ")}
                 >
                   Start Free Trial
@@ -2851,6 +2851,7 @@ function ProfileBoardPreview({ board, theme }: { board: Board; theme: BoardTheme
     </div>
   );
 }
+
 
 
 
