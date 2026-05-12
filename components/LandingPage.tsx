@@ -149,7 +149,7 @@ export function LandingPage({ featuredCourse, onStartFreeTrial, onViewCourses, o
               <button
                 type="button"
                 onClick={onStartFreeTrial}
-                className="rounded-xl bg-emerald-400 px-6 py-3 text-sm font-semibold text-zinc-950 shadow-[0_18px_48px_rgba(74,222,128,0.28)] transition hover:bg-emerald-300"
+                className="rounded-xl bg-[#007BFF] px-6 py-3 text-sm font-semibold text-white shadow-[0_0_18px_rgba(54,208,255,0.25)] transition hover:bg-[#36D0FF]"
               >
                 Start Free Trial
               </button>
@@ -318,7 +318,7 @@ export function LandingPage({ featuredCourse, onStartFreeTrial, onViewCourses, o
               <button
                 type="button"
                 onClick={onStartFreeTrial}
-                className="mt-8 w-full rounded-xl bg-emerald-400 px-5 py-3 text-sm font-semibold text-zinc-950 transition hover:bg-emerald-300"
+                className="mt-8 w-full rounded-xl bg-[#007BFF] px-5 py-3 text-sm font-semibold text-white shadow-[0_0_18px_rgba(54,208,255,0.25)] transition hover:bg-[#36D0FF]"
               >
                 Start Free Trial
               </button>
@@ -351,7 +351,7 @@ export function LandingPage({ featuredCourse, onStartFreeTrial, onViewCourses, o
             <button
               type="button"
               onClick={onStartFreeTrial}
-              className="mt-8 rounded-xl bg-emerald-400 px-6 py-3 text-sm font-semibold text-zinc-950 transition hover:bg-emerald-300"
+              className="mt-8 rounded-xl bg-[#007BFF] px-6 py-3 text-sm font-semibold text-white shadow-[0_0_18px_rgba(54,208,255,0.25)] transition hover:bg-[#36D0FF]"
             >
               Start Free Trial
             </button>

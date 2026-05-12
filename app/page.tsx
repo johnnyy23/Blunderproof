@@ -1700,26 +1700,50 @@ const topNavigationItems: Array<{ page: HomeView; label: string; isActive: boole
             )}
 
             {showTopNavigation ? (
-              <div className="flex flex-wrap items-center justify-center gap-2 lg:px-6">
-                {topNavigationItems.map((item) => (
-                  <button
-                    key={item.page}
-                    type="button"
-                    onClick={() => setCurrentPage(item.page)}
-                    className={[
-                      "rounded-md border px-4 py-2 text-sm font-semibold transition",
-                      item.isActive
-                        ? "border-emerald-300/35 bg-emerald-300/10 text-emerald-100"
-                        : "border-white/10 bg-white/[0.03] text-zinc-300 hover:bg-white/[0.05]"
-                    ].join(" ")}
-                  >
-                    {item.label}
-                  </button>
-                ))}
+              <div className="flex flex-col items-center justify-center gap-2 lg:px-6">
+                <div className="flex flex-wrap items-center justify-center gap-2">
+                  {topNavigationItems
+                    .filter((item) => item.page !== "landing")
+                    .map((item) => (
+                      <button
+                        key={item.page}
+                        type="button"
+                        onClick={() => setCurrentPage(item.page)}
+                        className={[
+                          "rounded-md border px-4 py-2 text-sm font-semibold transition",
+                          item.isActive
+                            ? "border-emerald-300/35 bg-emerald-300/10 text-emerald-100"
+                            : "border-white/10 bg-white/[0.03] text-zinc-300 hover:bg-white/[0.05]"
+                        ].join(" ")}
+                      >
+                        {item.label}
+                      </button>
+                    ))}
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setCurrentPage("landing")}
+                  className={[
+                    "rounded-md border border-cyan-200/40 bg-[#007BFF] px-8 py-2.5 text-sm font-semibold text-white shadow-[0_0_18px_rgba(54,208,255,0.25)] transition hover:bg-[#36D0FF]",
+                    currentPage === "landing" ? "ring-2 ring-cyan-200/60" : ""
+                  ].join(" ")}
+                >
+                  Start Free Trial
+                </button>
               </div>
             ) : null}
 
             <div className="ml-auto flex items-start gap-3 justify-self-end">
+              {!authUser && (currentPage === "course" || currentPage === "analysis") ? (
+                <button
+                  type="button"
+                  onClick={() => setCurrentPage("landing")}
+                  className="hidden sm:inline-flex h-[86px] items-center justify-center rounded-lg border border-cyan-200/40 bg-[#007BFF] px-6 text-sm font-semibold text-white shadow-[0_0_18px_rgba(54,208,255,0.25)] transition hover:bg-[#36D0FF]"
+                >
+                  Start Free Trial
+                </button>
+              ) : null}
               <button
                 type="button"
                 onClick={() => setCurrentPage("leaderboard")}
@@ -2836,5 +2860,7 @@ function ProfileBoardPreview({ board, theme }: { board: Board; theme: BoardTheme
     </div>
   );
 }
+
+
 
 
