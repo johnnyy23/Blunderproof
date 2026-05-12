@@ -71,21 +71,6 @@ export function ProfileAccountSection({
     }
   }, [currentUser, preferredMode]);
 
-  async function startTrialCheckout(billingEmail: string) {
-    const response = await fetch("/api/auth/checkout", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ plan: "pro", billingCycle: "monthly", billingEmail })
-    });
-    const payload = (await response.json()) as { checkoutUrl?: string; error?: string };
-
-    if (!response.ok || !payload.checkoutUrl) {
-      throw new Error(payload.error || "Could not open Stripe checkout.");
-    }
-
-    window.location.href = payload.checkoutUrl;
-  }
-
   async function handleAuthSubmit() {
     setErrorMessage("");
     setStatusMessage("");
@@ -118,10 +103,6 @@ export function ProfileAccountSection({
       setStatusMessage(mode === "signup" ? "Account created." : "Signed in.");
       setPassword("");
       setConfirmPassword("");
-
-      if (mode === "signup" && preferredMode === "signup") {
-        await startTrialCheckout(payload.user.billingEmail || email);
-      }
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : "Something went wrong.");
     } finally {
