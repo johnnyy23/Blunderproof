@@ -257,7 +257,7 @@ function buildReplaySnapshots(line: TrainingLine): BoardState[] {
 }
 
 export default function Home() {
-  const [currentPage, setCurrentPage] = useState<HomeView>("landing");
+  const [currentPage, setCurrentPage] = useState<HomeView>("courses");
   const [authEntryMode, setAuthEntryMode] = useState<"signin" | "signup">("signin");
   const [activeAnalysisSection, setActiveAnalysisSection] = useState("overview");
   const [isCompactCourseSidebar, setIsCompactCourseSidebar] = useState(false);
@@ -1628,7 +1628,7 @@ export default function Home() {
     : `${activeLine.dueLevel} line`;
   const featuredCourse = useMemo(() => allCourses.find((course) => course.repertoire === "white") ?? allCourses[0], [allCourses]);
 const topNavigationItems: Array<{ page: HomeView; label: string; isActive: boolean }> = [
-    { page: "landing", label: "Home", isActive: currentPage === "landing" },
+    { page: "landing", label: "Start Free Trial", isActive: currentPage === "landing" },
     { page: "courses", label: "Courses", isActive: currentPage === "courses" || currentPage === "course" },
     { page: "analysis", label: "Analysis", isActive: currentPage === "analysis" },
     { page: "create", label: "Create a course", isActive: currentPage === "create" },
@@ -1684,7 +1684,7 @@ const topNavigationItems: Array<{ page: HomeView; label: string; isActive: boole
             ) : (
               <button
                 type="button"
-                onClick={() => setCurrentPage("landing")}
+                onClick={() => setCurrentPage("courses")}
                 className="flex items-center gap-3 justify-self-start rounded-xl border border-white/10 bg-white/[0.03] px-3 py-3 text-left transition hover:bg-white/[0.05]"
               >
                 <img
@@ -2836,4 +2836,5 @@ function ProfileBoardPreview({ board, theme }: { board: Board; theme: BoardTheme
     </div>
   );
 }
+
 
